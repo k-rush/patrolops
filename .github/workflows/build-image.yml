@@ -78,7 +78,7 @@ jobs:
           tags: ${{ vars.ACR_LOGIN_SERVER }}/patroller-audit:${{ inputs.release_sha }}
           provenance: mode=max
           sbom: true
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         if: steps.existing.outputs.digest == '' && vars.ENABLE_GITHUB_ATTESTATIONS == 'true'
         with:
           subject-name: ${{ vars.ACR_LOGIN_SERVER }}/patroller-audit
