@@ -67,7 +67,7 @@ jobs:
           token="$(az acr login --name "$ACR_NAME" --expose-token --query accessToken --output tsv)"
           echo "::add-mask::$token"
           printf '%s' "$token" | docker login "$ACR_LOGIN_SERVER" --username 00000000-0000-0000-0000-000000000000 --password-stdin
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
         if: steps.existing.outputs.digest == ''
       - uses: docker/build-push-action@v7
         if: steps.existing.outputs.digest == ''
