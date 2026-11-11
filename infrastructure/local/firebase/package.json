@@ -4,5 +4,5 @@
   "version": "0.1.0",
   "type": "module",
   "engines": { "node": ">=22" },
-  "dependencies": { "firebase-tools": "15.34.2" }
+  "dependencies": { "firebase-tools": "15.35.0" }
 }
