@@ -89,6 +89,30 @@ input { padding: 12px; border: 1px solid #cdd7ca; border-radius: 5px; background
 .safety-note { font-size: 11px; color: #798477; }
 .tile-warning { display: none; position: absolute; z-index: 401; bottom: 0; right: 12px; left: 60px; background: #fff0e8; padding: 6px; font-size: 11px; }
 .dispatch-map[data-tiles-unavailable] ~ .tile-warning { display: block; }
+.vitals-panel { background: white; border: 1px solid #dfe4d9; border-radius: 8px; padding: 24px; margin-top: 20px; }
+.vitals-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.vitals-heading p { overflow-wrap: anywhere; }
+.vitals-panel fieldset { border: 0; padding: 0; display: grid; gap: 16px; max-width: 700px; min-width: 0; }
+.vital-inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.vitals-panel textarea, .vitals-panel select { font: inherit; padding: 10px; border: 1px solid #cdd7ca; border-radius: 5px; }
+.vitals-panel textarea { min-height: 80px; resize: vertical; }
+.vitals-panel textarea:focus-visible, .vitals-panel select:focus-visible { outline: 3px solid #d2a84b; outline-offset: 3px; }
+.vital-actions { display: flex; gap: 10px; margin-top: 18px; }
+.vital-table { overflow-x: auto; }
+.vital-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.vital-table caption { text-align: left; font-weight: 700; padding: 12px 0; }
+.vital-table th, .vital-table td { padding: 12px; text-align: left; border-bottom: 1px solid #dfe4d9; vertical-align: top; }
+.vital-table td p, .vital-audit dd { white-space: pre-wrap; overflow-wrap: anywhere; }
+.vital-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; }
+.vital-charts svg { width: 100%; color: #183c34; font-size: 12px; }
+.vital-audit article { border-top: 1px solid #dfe4d9; }
+.vital-audit p { overflow-wrap: anywhere; }
+.vitals-panel [role="alert"] { color: #8d3e2d; }
+@media (max-width: 650px) {
+  .vitals-panel { padding: 16px; }
+  .vitals-heading { align-items: flex-start; flex-direction: column; }
+  .vital-inputs { grid-template-columns: 1fr; }
+}
 @media (min-width: 1600px) { .workspace-body { padding: 30px 40px 0; } .workspace-header { padding: 35px 40px; } }
 @media (max-width: 900px) { .sidebar { width: 190px; padding-left: 12px; padding-right: 12px; } .workspace-header { padding: 24px; } .workspace-body { padding: 20px 20px 0; } .context-bar .muted { display: none; } .coordinates { display: none; } }
 @media (max-width: 650px) {

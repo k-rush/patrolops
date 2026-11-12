@@ -16,10 +16,12 @@ and coordinates. Closing the popout keeps its reopenable marker.
 Firebase email/password sign-in requires a pre-provisioned dispatcher account
 with Summit West access. This POC is for fictional data only, not operational dispatch.
 
-The [dispatcher vitals user story](docs/DISPATCHER_VITALS_USER_STORY.md) is an
-approved documentation-only baseline with open questions for recording
-radio-reported measurements and reviewing their history. It is not an
-implemented feature or an approved delivery plan.
+Select an incident to record radio-reported heart rate, respiratory rate, and
+SpO2 in its patient-vitals panel. Partial reports, minute-level Pacific-time
+input, timestamped history, separate point charts, and auditable corrections are
+supported. Vitals refresh automatically every 10 seconds without replacing
+unfinished input. See the [dispatcher vitals story](docs/DISPATCHER_VITALS_USER_STORY.md)
+for scope, decisions, and implementation evidence.
 
 ## Local development
 
@@ -34,7 +36,7 @@ Open **http://127.0.0.1:18080**. Local Cosmos DB and Firebase Auth use real
 emulators, isolated Compose resources, and persistent named volumes. Ports are
 chosen to avoid common development defaults. Override ports in an untracked `.env` file
 or use `Start-Local.ps1 -Port 18090`. No identities or business data are seeded.
-The local readiness check creates the database and empty incidents container.
+The local readiness check creates the database and empty incidents/vitals containers.
 Provision an explicit local dispatcher account (use a fictional email):
 
 ```powershell
@@ -45,7 +47,10 @@ Provision an explicit local dispatcher account (use a fictional email):
 Sign in at the local app URL. Accounts and incidents survive stack restarts.
 Map tiles require internet access and are attributed to OpenStreetMap.
 Use **Refresh incidents** to see other dispatchers' new records; there is no
-live subscription, incident editing, assignment, or closure workflow.
+live subscription, incident metadata editing, assignment, or closure workflow.
+Vitals use polling while an incident is open. Vital entry is online-only:
+explicitly save and wait for confirmation; use the same pending retry after a
+failed/uncertain save. Unsaved vital input does not survive closing the tab.
 
 Stop this stack without deleting data:
 

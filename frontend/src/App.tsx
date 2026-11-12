@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type Auth, type User } from 'firebase/auth';
 import { initializeIdentity } from './platform/firebase';
 import DispatchMap from './DispatchMap';
+import VitalsPanel from './VitalsPanel';
 import { api, loadIncidents, readPendingIncident, resortTime, type Incident, type IncidentRequest } from './dispatch';
 
 let identity: Promise<Auth> | undefined;
@@ -76,6 +77,17 @@ export function CommandCenter({ user, onSignOut }: { user: User; onSignOut: () =
   const lock = useRef(false);
   const mounted = useRef(true);
   const selected = incidents.find(incident => incident.id === selectedId);
+  const dirtyVitals = useRef(false);
+  const onVitalsDirty = useCallback((dirty: boolean) => { dirtyVitals.current = dirty; }, []);
+  function canLeaveVitals() {
+    return !dirtyVitals.current || window.confirm('Discard unsaved vital changes? An unconfirmed save may already be recorded.');
+  }
+  function selectIncident(id?: string) {
+    if (id === selectedId || canLeaveVitals()) setSelectedId(id);
+  }
+  function changeView(next: 'map' | 'incidents') {
+    if (next === view || canLeaveVitals()) setView(next);
+  }
 
   useEffect(() => {
     mounted.current = true;
@@ -124,21 +136,24 @@ export function CommandCenter({ user, onSignOut }: { user: User; onSignOut: () =
 
   function create(latitude: number, longitude: number) {
     if (pending || !loaded || loading || loadError) return;
+    if (!canLeaveVitals()) return;
     void save({ id: crypto.randomUUID(), latitude, longitude });
   }
 
-  function open(id: string) { setSelectedId(id); setView('map'); }
+  function open(id: string) { if (canLeaveVitals()) { setSelectedId(id); setView('map'); } }
 
   return <div className="app-shell">
     <aside className="sidebar">
       <a className="brand" href="#main"><span className="brand-symbol" aria-hidden="true">/▲</span><span><strong>PatrolOps</strong></span></a>
       <div className="resort-label"><span className="eyebrow">Command center</span><strong>Summit West</strong><span>Snoqualmie Pass, WA</span></div>
       <nav aria-label="Main views">
-        <button aria-current={view === 'map' ? 'page' : undefined} onClick={() => setView('map')}><span aria-hidden="true">⌖</span>Dispatch map</button>
-        <button aria-current={view === 'incidents' ? 'page' : undefined} onClick={() => setView('incidents')}><span aria-hidden="true">≡</span>Incidents <span className="nav-count">{incidents.length}</span></button>
+        <button aria-current={view === 'map' ? 'page' : undefined} onClick={() => changeView('map')}><span aria-hidden="true">⌖</span>Dispatch map</button>
+        <button aria-current={view === 'incidents' ? 'page' : undefined} onClick={() => changeView('incidents')}><span aria-hidden="true">≡</span>Incidents <span className="nav-count">{incidents.length}</span></button>
       </nav>
       <div className="sidebar-footer"><span className="eyebrow">Dispatcher</span><span className="account">{user.email}</span>
-        <button disabled={saving} onClick={() => void onSignOut().catch(() => setError('Sign-out failed. Try again.'))}>Sign out</button>
+        <button disabled={saving} onClick={() => {
+          if (canLeaveVitals()) void onSignOut().catch(() => setError('Sign-out failed. Try again.'));
+        }}>Sign out</button>
       </div>
     </aside>
     <main id="main" className="workspace">
@@ -152,17 +167,18 @@ export function CommandCenter({ user, onSignOut }: { user: User; onSignOut: () =
       <div className="workspace-body">
         <section className="context-bar" aria-label="Resort context"><div><span className="location-dot" /> <strong>Summit West</strong><span className="muted">Washington, USA</span></div><span>{incidents.length} incident{incidents.length === 1 ? '' : 's'} loaded</span></section>
         {view === 'map' ? <section className="map-shell" aria-label="Dispatch workspace">
-          <DispatchMap incidents={incidents} selected={selected} onSelect={setSelectedId} onCreate={create}
+          <DispatchMap incidents={incidents} selected={selected} onSelect={selectIncident} onCreate={create}
             disabled={!loaded || loading || !!loadError || !!pending || saving} />
           {saving && <div className="map-status" role="status">Saving incident…</div>}
           {selected && <aside className="incident-popout" role="dialog" aria-modal="false" aria-labelledby="incident-heading">
-            <header><span className="eyebrow">Incident details</span><button className="close" aria-label="Close incident popout" onClick={() => setSelectedId(undefined)}>×</button></header>
+            <header><span className="eyebrow">Incident details</span><button className="close" aria-label="Close incident popout" onClick={() => selectIncident(undefined)}>×</button></header>
             <h2 id="incident-heading">Incident <span>{selected.id.slice(0, 8).toUpperCase()}</span></h2>
             <p className="saved-label">Saved to Summit West</p>
             <dl><dt>Created · Pacific time</dt><dd>{resortTime(selected.createdAt)}</dd>
               <dt>Location</dt><dd>{selected.latitude.toFixed(5)}, {selected.longitude.toFixed(5)}</dd>
               <dt>Incident ID</dt><dd className="incident-id">{selected.id}</dd></dl>
             <p className="muted popout-hint">Close this panel to return to the map. Select its marker to reopen.</p>
+            <p><a href="#incident-vitals">Record and review patient vitals</a></p>
           </aside>}
           {!selected && !saving && <div className="map-hint"><strong>Every response starts with a location.</strong><span>Click anywhere on the map to create an incident.</span></div>}
         </section> : <section className="incident-list" aria-label="Saved incidents">
@@ -172,6 +188,8 @@ export function CommandCenter({ user, onSignOut }: { user: User; onSignOut: () =
             <span className="coordinates">{incident.latitude.toFixed(5)}, {incident.longitude.toFixed(5)}</span><span aria-hidden="true">→</span>
           </button>)}
         </section>}
+        {view === 'map' && selected && <VitalsPanel key={selected.id} user={user}
+          incidentId={selected.id} onDirtyChange={onVitalsDirty} />}
         <footer className="workspace-footer"><span>Proof of concept — not for operational dispatch</span><span>Times shown in America/Los_Angeles</span></footer>
       </div>
     </main>

@@ -2,10 +2,10 @@
 
 ## Status and boundary
 
-**Approved story baseline with open questions - 2026-11-12.**
-Story ID: **DIS-VITALS-01**. The user approved the consolidated scope with the
-listed open questions. Conversation decisions below are confirmed requirements;
-technical proposals and unresolved details are not implementation approval.
+**Approved story; implementation authorized 2026-11-12.**
+Story ID: **DIS-VITALS-01**. Following merge of the baseline, the user authorized
+implementation and resolved the blocking choices below. Closed-incident behavior
+remains deferred. Publication and cloud deployment require separate authorization.
 
 **As a dispatcher, I want to record radio-reported patient vitals on an incident
 and review their changes over time, so I can follow the reported measurements.**
@@ -22,16 +22,16 @@ and review their changes over time, so I can follow the reported measurements.**
 - Safety: record reported observations, not medical verification, diagnosis,
   treatment guidance, clinical alerts, or severity classification.
 - Scope: heart rate (beats/min), respiratory rate (breaths/min), and SpO2 (%).
-  Implementation, publication, deployment, and real patient data are not authorized.
+  Implementation is authorized; publication, deployment, and real patient data are not.
 
 ## Ordered journey and acceptance criteria
 
-Criteria describe expected behavior, not implemented behavior.
+Criteria describe approved behavior; implementation evidence is tracked below.
 
 | ID | User action / Given-When | System response / Then | Validation, persisted effect, next state |
 |---|---|---|---|
 | DV-01 | An authorized dispatcher selects an existing incident. | Show a vital-entry form, the incident's saved history newest measurement first, and separate trend charts for each vital. Clearly identify the selected incident. | Server verifies dispatcher access to the incident's ski area/resort. Read only; no patient details are invented. An empty history is explicitly empty. |
-| DV-02 | The dispatcher enters a radio report. | Accept any subset of the three vitals, an optional reporting patroller, and an optional note. Label units. Measurement time defaults to now and is adjustable. | Require at least one vital. Heart and respiratory rates are positive whole numbers; SpO2 is a number from 0 through 100 inclusive. Unreported values remain absent, not zero or copied from earlier reports. Unsaved form state is not a record. |
+| DV-02 | The dispatcher enters a radio report. | Accept any subset of the three vitals, an optional reporting patroller, and an optional note. Label units. Measurement time defaults to now and is adjustable. | Require at least one vital. Heart and respiratory rates are positive whole numbers; SpO2 is a whole number from 0 through 100 inclusive. Unreported values remain absent, not zero or copied from earlier reports. Unsaved form state is not a record. |
 | DV-03 | The dispatcher adjusts measurement time, including backfill before incident creation. | Enter and display time in the ski area/resort timezone with a visible timezone label. Order history by measurement time rather than entry time. | Reject future measurement instants using server time. Store an unambiguous measurement instant separately from the server-assigned entry instant. No lower bound at incident creation is imposed. |
 | DV-04 | The dispatcher explicitly selects Save. | Show saving, then saved or failed; only acknowledge success after server confirmation. On success, show the saved report in the history and relevant charts. | Persist a stable report ID linked to the incident/resort, supplied measurements/time/source/note, and authenticated recorder identity plus server entry time. Invalid requests make no change. |
 | DV-05 | The dispatcher reviews measurements across multiple reports. | The table shows measurement time and reported values; separate labeled charts plot each vital against measurement time. Missing values are not plotted as zero or carried forward. | Reads use current saved versions. Corrections to measurements/time update their corresponding table/chart entries. Entry time is not substituted for measurement time. No clinical interpretation is added. |
@@ -74,20 +74,20 @@ that description for this story.
 | `frontend/src/dispatch.ts`; `frontend/src/DispatchMap.tsx` | Incident types/API helper, selectable map markers, and time formatting in `America/Los_Angeles`. | No vital DTOs or forms. Resort timezone is fixed for Summit West, not configurable generally. |
 | `docs/OPERATIONS.md`, Configuration and Dispatch POC contracts | Server policy requires verified `dispatcher: true` and `resortId: "summit-west"`; incidents container partitions by `/resortId`. | General resort/area membership is deferred; a new vitals store needs explicit provisioning and scoped access. |
 
-No feature code has been changed or verified for this story. There are no other
-maintained user-story, domain-model, or API guide documents in the fetched `docs`
-directory. Related current journey: the Dispatch POC contract in
+The table above records the pre-implementation baseline, not the current feature.
+Implementation adds the vital model and contract described below. Related journey:
+the Dispatch POC contract in
 [Operations](OPERATIONS.md).
 
 ## Data-model and API impact
 
-The incident domain model exists; vital reports, revisions, and patient entities
-do not. This story requires a new vital-report concept, not reuse of coordinates,
+The baseline had incidents but no vital reports, revisions, or patient entities.
+Implementation adds reports and revisions, not reuse of coordinates,
 creation timestamps, or free-form incident fields. One incident represents one
 patient's vital history for this scope; no demographic data or multi-patient
 model is introduced.
 
-Proposed representation, subject to implementation design review:
+Implemented representation:
 
 - Incident has zero to many reports. Each report has stable identity, incident
   identity, resort ownership, schema version, nullable measurements with explicit
@@ -100,44 +100,46 @@ Proposed representation, subject to implementation design review:
 - Authenticated server context supplies ownership and audit identities. The
   measurement instant is dispatcher input validated server-side, not proof of
   when a patroller physically measured a vital.
-- Report is the proposed aggregate boundary, not the entire incident. Independent
+- Report is the aggregate boundary, not the entire incident. Independent
   reports must not rewrite incident metadata or overwrite other reports.
   Current state, audit append, and operation receipt must commit atomically.
   Internal version checks/retries may serialize writes, but must implement the
   approved overwrite policy rather than expose a new conflict workflow.
-- An exact retry returns its original operation result without another write;
+- An exact retry confirms its originally accepted revision and returns the
+  current report without another write;
   a reused identity with changed payload must be rejected. Account for a lost
   response followed by a newer edit. No autosave or private-draft writes exist
   in this scope, so that race is excluded; shared correction races are covered.
-- Proposed incident-scoped create/list/read/correct/audit commands and queries
+- Incident-scoped create/list/correct/audit commands and queries
   require parent-incident existence and resort authorization on every request.
   Response contracts include server save status/current revision and timestamps;
   correction failures must not falsely acknowledge persistence.
-- Listing needs deterministic measurement-time order, pagination, and an audit
-  cursor/order. Charts must not silently represent only one page as complete
-  history. Equal-time ordering, chart retrieval, and DST ambiguity remain open.
-- Container layout, partition key, measurement-time indexes, and transaction
-  boundaries must be selected together. A resort partition is compatible with
-  current ownership, but container selection and throughput are not approved.
-  Audit and receipt writes cannot be best-effort independent writes.
-- New backend validators/DTOs/repositories and frontend types/forms/charts/audit
-  readers are required. No export or downstream medical reader exists to update.
+- Lists use measurement time descending, original entry time descending, and ID
+  ascending, with opaque continuation cursors and at most 100 records per page.
+  The client follows all pages before replacing displayed history/charts.
+- The new `vitals` container partitions by `/incidentKey`, combining the
+  server-owned resort and incident UUID. Current report and immutable revision
+  (also the operation receipt) commit atomically. Internal ETags serialize
+  overwrites, retrying up to eight times before a retryable 503.
+  No independent best-effort audit writes or unbounded embedded audit arrays.
+- Backend validators/DTOs/persistence and frontend types/forms/charts/audit
+  readers are added. No export or downstream medical reader exists to update.
   Future fixtures and acceptance records must be fictional and API-created.
 
 Existing incidents remain valid and have empty vital histories; do not fabricate
 patient records, measurements, performers, occurrence times, or lifecycle
-statuses. Prefer additive storage that leaves schema-v1 incident creation/read
-behavior intact. Vital schema versioning and absent-field rules need explicit
-contracts. An older retained app revision can ignore additive vital storage;
+statuses. Additive storage leaves schema-v1 incident creation/read
+behavior intact. Reports and revisions are schema v1; unreported vital fields are
+null, never inferred. An older retained app revision can ignore additive vital storage;
 rollback must preserve reports and audit history rather than delete containers.
 
 Before separately authorized rollout, provision required containers/indexes and
 container-scoped permissions before dependent application code is deployed.
-Local emulator provisioning/readiness must be updated alongside approved
-implementation. Real patient-data retention, privacy, networking, and launch
+Local emulator provisioning/readiness includes the new container and index.
+Real patient-data retention, privacy, networking, and launch
 review remain unmet operational prerequisites, not authorized by this story.
 
-## Decisions and open questions
+## Decisions and deferred scope
 
 Confirmed: single-patient existing incident; three vitals with partial reports;
 adjustable measurement time defaulting to now; optional reporting patroller/note;
@@ -150,28 +152,53 @@ Superseded proposal: retain input and require manual reconciliation on a
 concurrent correction. The user selected overwrites instead. No lock, lease, or
 single-editor enforcement is approved.
 
-| ID | Unresolved or provisional decision | Impact |
+| ID | Resolution | Impact |
 |---|---|---|
-| OQ-01 | Optional reporting patroller: free text, a roster identity, or both? Is a snapshot label required? | Resolve before source-field implementation; do not invent roster administration. |
-| OQ-02 | SpO2 decimal precision; note/source length limits; timestamp entry precision. | Numeric range is agreed, but rounding and payload limits are not. |
-| OQ-03 | DST repeated/nonexistent local times; equal measurement-time ordering; chart point/line presentation. | Resolve ambiguous time entry and deterministic presentation without medical interpretation. |
-| OQ-04 | Explicit refresh versus automatic synchronization of other dispatchers' changes. | Current incidents refresh manually; no live subscription has been approved for vitals. |
-| OQ-05 | Is Summit West the initial delivery target, using its existing verified claims and Pacific timezone? | General resort membership/timezone configuration is not implemented and is not implicitly authorized. |
-| OQ-06 | Closed-incident viewing/recording/correction rules. | Explicitly deferred neighboring journey, not part of this story's first delivery. |
+| OQ-01 | Resolved: optional free-text patroller name/call sign stored with each version. | No roster dependency or invented identity; proposed maximum 100 characters. |
+| OQ-02 | Resolved: whole-number SpO2; backend timestamps retain precision, UI input/display use whole minutes. | No rounding of fractional SpO2. Unchanged measurement instants retain hidden seconds during corrections. Proposed note limit 2,000 characters is applied. |
+| OQ-03 | Resolved: reject nonexistent local DST times, require offset choice for repeated times, tie-break by entry time then ID, use point charts. | No interpolation or inferred readings. |
+| OQ-04 | Resolved: automatic refresh while incident is open. | Implementation polls every 10 seconds with manual refresh too; preserves unfinished input. |
+| OQ-05 | Resolved: Summit West only, existing verified claims and Pacific timezone. | General resort membership/configuration remains outside scope. |
+| OQ-06 | Deferred: closed-incident viewing/recording/correction rules. | Explicitly excluded neighboring journey; no closure flag is introduced. |
 
-The approved baseline retains the listed open questions; blocking source/time/
-contract decisions must be resolved before implementation. Story approval does
-not authorize feature implementation or publication.
+The user confirmed the implementation choices after baseline merge. The SpO2
+whole-number decision supersedes the earlier open decimal-precision question.
+Timestamp storage is not truncated to minutes; only UI entry/display is
+minute-level. Implementation authorization does not authorize publication,
+provisioning, cloud deployment, or real patient data.
 
-## Future implementation traceability and evidence
+## Implementation traceability and evidence
 
-| Criteria | Required change | Future evidence |
-|---|---|---|
-| DV-01, DV-11 | Incident-scoped queries, verified resort authorization, selected-incident UI. | Authenticated allowed/denied API reads and writes using real Firebase/Cosmos emulators. |
-| DV-02 through DV-05 | Report persistence, server validation/time rules, form, table, and charts. | API-created partial/complete reports, boundary/future-time rejection, reload persistence, backfill ordering, absent readings, and timezone cases. |
-| DV-06 through DV-08 | Atomic current revision/audit/receipt writes, corrections and audit UI, overwrite policy. | Cross-dispatcher correction, complete before/after attribution, concurrent accepted writes, and no lost audit versions. |
-| DV-09, DV-10 | Explicit save state, exact retry, preserved in-form input, navigation warning, failed-read handling. | Failed/uncertain save and retry, retry after a later edit, no duplicate revisions, and visible stale/read-failure state. |
+| Criteria | Baseline gap | Model/API/UI change | Evidence |
+|---|---|---|---|
+| DV-01, DV-11 | No vital domain or access endpoints. | `Vitals.cs` parent lookup and existing dispatcher policy; `VitalsPanel.tsx` selected-incident form. | `frontend/e2e/dispatch.pw.ts`: real Firebase permitted/denied queries and writes; nonexistent parent and cross-incident isolation. |
+| DV-02 through DV-05 | No measurement validation, time history, or trends. | Server integer/time validation; timestamp storage; minute-level timezone form; full paginated history and point charts. | `VitalsTests.cs`, `vitals.test.ts`, and real-emulator/browser cases cover partial reports, invalid/future values, DST, precision retention, backfill, pagination, missing measurements, and reload. |
+| DV-06 through DV-08 | No correction or audit mechanism. | Transactional report/revision receipts with internal ETag serialization and approved overwrite behavior. | Real-emulator acceptance covers concurrent create retry, two-editor corrections, full before/after chaining, original creator retention, and audit pagination. |
+| DV-09, DV-10 | No vital save/recovery UI. | Explicit save, in-memory retry identity, disabled uncertain-input form, navigation warning, visible stale reads, polling independent of edits. | `VitalsPanel.test.tsx` and browser acceptance cover lost real response, exact retry, later-version preservation, rejected input retention, failed refresh, automatic refresh, and navigation cancellation. |
 
-All rows are **expected, not implemented or verified**. Implementation requires
-separate authorization and end-to-end API/browser evidence, not screenshots or
-pure-client tests alone. No screenshots or deployment evidence were requested.
+All rows are implemented. The validation record below distinguishes checks run
+from coverage defined; no clinical correctness, cloud authorization/provisioning,
+or real-world patrol readiness is claimed. All acceptance data is fictional and
+created through authenticated APIs and the Firebase Auth emulator.
+
+### Validation record
+
+Validation uses the isolated Compose project `patroller-audit-feat-dispatcher-vitals`
+and API/Firebase origins `http://127.0.0.1:38080` and `http://127.0.0.1:39099`.
+Other worktrees' stacks are untouched; no cloud rollout was performed. Frontend
+commands used Node 24.22.3 through
+`npx --yes --package=node@24 --package=npm@11 -c "<command>"` because the default
+host Node is too old for this repository.
+
+| Command | Result |
+|---|---|
+| `dotnet restore backend\PatrollerAudit.slnx --locked-mode` | Passed. |
+| `dotnet format backend\PatrollerAudit.slnx --verify-no-changes --no-restore` | Passed on the final backend source. |
+| `dotnet build backend\PatrollerAudit.slnx -c Release --no-restore --verbosity quiet` | Passed on the final backend source, no warnings/errors. |
+| `dotnet test backend\PatrollerAudit.slnx -c Release --no-restore` | Initially passed 20 tests. A later rerun was blocked by Windows Application Control loading the test assembly (0x800711C7); final query/retry changes are not claimed unit-test verified. No policy was disabled or bypassed. |
+| In `frontend`: `npm run lint`, `npm run build`, `npm test` | Passed; 17 unit tests, including timestamp/DST, paginated reads, and recovery cases. |
+| In `frontend`: `npm run test:e2e` | Existing three dispatch cases passed. Subsequent targeted runs verified the finalized vitals cases after fixing pagination and a test selector; the initial full run is not claimed wholly passing. |
+| In `frontend`: `npm run test:e2e -- --grep vital` | Final API/audit and 101-report/101-revision pagination cases passed; browser case then exposed an overly strict label selector. |
+| In `frontend`: `npm run test:e2e -- --grep dispatcher.records` | Passed after selector correction, including DST input, lost real save response, audit, automatic refresh, navigation, reload, and mobile layout. Together the runs cover all six acceptance cases against real Firebase/Cosmos emulators. |
+| `.\scripts\Start-Local.ps1 -Port 38080`; `.\scripts\Test-Local.ps1 -Port 38080` | Passed with all five isolated port variables and project name supplied. |
+| `az bicep build --file infrastructure\main.bicep --stdout` | Passed; includes the new container/index/scoped grant module. |
