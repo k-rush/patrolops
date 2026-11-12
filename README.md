@@ -16,6 +16,11 @@ and coordinates. Closing the popout keeps its reopenable marker.
 Firebase email/password sign-in requires a pre-provisioned dispatcher account
 with Summit West access. This POC is for fictional data only, not operational dispatch.
 
+The [dispatcher vitals user story](docs/DISPATCHER_VITALS_USER_STORY.md) is an
+approved documentation-only baseline with open questions for recording
+radio-reported measurements and reviewing their history. It is not an
+implemented feature or an approved delivery plan.
+
 ## Local development
 
 Use Docker Desktop's Linux engine and PowerShell 7:
