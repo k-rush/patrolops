@@ -61,7 +61,8 @@ jobs:
           docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
 
   packaged-app:
-    runs-on: ubuntu-latest
+    # Playwright 1.56 does not support Ubuntu 26.04 (ubuntu-latest).
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7

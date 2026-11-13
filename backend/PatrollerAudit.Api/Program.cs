@@ -7,6 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 var settings = new RuntimeSettings(builder.Configuration, builder.Environment);
 builder.Services.AddSingleton(settings);
 builder.Services.AddProblemDetails();
+builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = false);
 builder.Services.AddFirebaseAuthentication(settings);
 builder.Services.AddSingleton<CosmosReadiness>();
 builder.Services.AddSingleton(TimeProvider.System);
@@ -31,6 +32,7 @@ app.MapGet("/api/config", (IConfiguration configuration) => Results.Ok(new
     emulatorUrl = settings.EmulatorEnabled ? configuration["Auth:EmulatorPublicUrl"] : null
 })).AllowAnonymous();
 app.MapIncidents();
+app.MapVitals();
 app.MapGet("/api/{**path}", () => Results.NotFound()).AllowAnonymous();
 app.MapFallbackToFile("index.html").AllowAnonymous();
 app.Run();

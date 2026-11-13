@@ -58,9 +58,10 @@ geofenced. This is not a real-time collaboration or operational patrol system.
 This introduces the first domain container, `incidents`, partitioned by `/resortId`.
 IDs are client-generated UUID request identities, not trusted business attribution.
 Creation time is entry time, not an asserted incident occurrence time.
-There is no status, medical information, assignment, update/delete endpoint,
-offline write queue, or automatic conflict overwrite. Append-only records do not
-need edit ETags. The default Cosmos index supports descending `createdAt` reads;
+Incident metadata has no status, patient details, assignment, update/delete endpoint,
+or offline write queue. Its append-only records do not need edit ETags.
+The separate vital-report contract below adds measurements and corrections without
+changing incident metadata. The default Cosmos index supports descending `createdAt` reads;
 all queries use the fixed Summit West partition. Other resorts and general
 multi-resort permissions remain deferred.
 
@@ -69,8 +70,8 @@ user, before a request is sent. A reload offers a manual retry, not an automatic
 write. With browser storage disabled, only in-memory retry survives. Closing the
 tab can lose an unconfirmed request identity; consult the shared list before
 creating a replacement. No input is represented as saved before the server replies.
-The server stores initial creator/time for attribution; no correction/history
-workflow exists in this POC.
+The server stores initial creator/time for incident attribution. Incident metadata
+has no correction/history workflow; vital reports retain their own revision history.
 
 The old scaffold had no domain records, so there is no historical migration or
 backfill. Before any separately authorized cloud rollout, provision the new
@@ -86,6 +87,65 @@ and refuses non-loopback or non-demo configuration. It creates only the explicit
 requested fictional local account. Packaged-app acceptance uses real Firebase
 identities and API-created Cosmos records, including denied access, client
 timestamp spoofing, lost-response retry, list/map switching, and reload recovery.
+
+## Dispatcher vitals contract
+
+The [approved story](DISPATCHER_VITALS_USER_STORY.md) covers a single patient's
+reported vitals per existing incident. Only Summit West is supported, using the
+same verified dispatcher/resort claims as incidents. No closed-incident lifecycle,
+roster administration, clinical interpretation, or real patient-data launch is added.
+
+| Action | API / invariant | Persisted effect / UI |
+|---|---|---|
+| Read vitals | `GET /api/incidents/{incidentId}/vitals?cursor=...` | Current reports, pages of at most 100; measurement time descending, original entry time descending, ID ascending. Client follows all cursors before updating table/charts. |
+| Record report | `POST /api/incidents/{incidentId}/vitals/{reportId}` with UUID `operationId` and `value` | `value` holds `measuredAt`, nullable `heartRate`, `respiratoryRate`, `spo2`, `reportingPatroller`, and `note`. At least one vital; positive integer rates; integer SpO2 0-100. Server validates and assigns creator/editor and entry/edit timestamps. |
+| Correct report | `PUT` to the same report path with a fresh operation UUID and complete replacement `value` | Last server-accepted write becomes current. Original creator/time remain. No permanent deletion or user-facing stale-edit conflict; each overwrite retains its actual before/after state. |
+| Inspect audit | `GET /api/incidents/{incidentId}/vitals/{reportId}/history?cursor=...` | Immutable revisions ascending, authenticated editor UID, server timestamp, before/after values. Revisions also serve as operation receipts. |
+| Retry uncertain save | Repeat the exact report ID, method, operation ID, values, and authenticated editor | No duplicate report/revision. Response includes the current report and `acceptedRevision`; a newer accepted correction is not rolled back. Changed input/actor with a reused identity returns 409. |
+
+Every request verifies the parent incident in the server-owned resort partition.
+An inaccessible/nonexistent incident cannot receive reports. Client-supplied resort,
+creator, edit timestamps, or revision numbers are not trusted. Malformed JSON or
+fractional integer measurements return 400, including in development.
+
+All timestamps are persisted as UTC instants with backend precision. UI input and
+display use whole minutes in `America/Los_Angeles`; correcting another field
+preserves hidden timestamp precision. Backfill before incident creation is allowed;
+future measurements are rejected against server time. Nonexistent local DST times
+are rejected, and repeated times require an explicit offset selection. Patroller
+source is optional free text (100 characters); optional notes allow 2,000 characters.
+
+The separate schema-v1 `vitals` container partitions by `/incidentKey`
+(`summit-west:{incidentId}`). A report document and its immutable revision/operation
+receipt commit in one transactional batch. Correction uses an internal ETag to
+serialize approved overwrites and preserve audit history. Contention re-reads both
+state and receipt, for up to eight attempts, then returns a retryable 503 without
+claiming success. This is not a user-facing optimistic-edit conflict policy.
+The composite index orders `/value/measuredAt` descending, `/createdAt` descending,
+and `/id` ascending; normal indexing supports per-report revision queries.
+Application cursors are incident/report-scoped keyset positions, not trusted
+authorization facts. Queries fetch at most 101 candidates and return at most 100,
+using the extra row to signal another page; the Cosmos page-size hint alone is
+not relied upon. Concurrent corrections can move a report between pages, so the
+client deduplicates by ID/highest revision and refreshes the full view on its
+next poll rather than claiming a multi-report transactional snapshot.
+
+The vital panel polls every 10 seconds while its incident is open, with manual
+refresh available. New data never replaces unfinished input. Missing measurements
+remain absent and are not plotted as zero or interpolated. Reads that fail leave a
+visible stale-data warning. Explicit saves show saving/confirmed/failed states;
+unconfirmed input and exact retry identity remain in memory, and the form is locked
+until retry or explicit cancellation. Navigation warns before discarding input,
+subject to browser unload-warning limitations. No offline queue or crash recovery
+is provided. Closing a form with an unconfirmed save does not undo a server write.
+
+Provision the new container, composite index, and its container-scoped data
+contributor grant via `infrastructure/main.bicep` **before** deploying this app
+revision. Cloud readiness now requires both containers. Local readiness provisions
+the same container/index against the real emulator. Existing incidents require no
+migration: their vital history starts empty. Older app revisions ignore the new
+container; rollback must retain all reports and revisions. No provisioning or cloud
+deployment is authorized merely by implementing or merging this feature.
 
 ## One-time cloud bootstrap
 

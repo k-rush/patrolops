@@ -65,6 +65,38 @@ resource cosmosReadRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignment
   }
 }
 
+resource vitals 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  parent: database
+  name: 'vitals'
+  properties: {
+    resource: {
+      id: 'vitals'
+      partitionKey: { paths: ['/incidentKey'], kind: 'Hash' }
+      indexingPolicy: {
+        indexingMode: 'consistent'
+        automatic: true
+        includedPaths: [{ path: '/*' }]
+        excludedPaths: [{ path: '/"_etag"/?' }]
+        compositeIndexes: [[
+          { path: '/value/measuredAt', order: 'descending' }
+          { path: '/createdAt', order: 'descending' }
+          { path: '/id', order: 'ascending' }
+        ]]
+      }
+    }
+  }
+}
+
+resource vitalsWriteRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-05-15' = {
+  parent: cosmos
+  name: guid(cosmos.id, vitals.id, identity.id, 'write-vitals')
+  properties: {
+    principalId: identity.properties.principalId
+    roleDefinitionId: '${cosmos.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002'
+    scope: '${cosmos.id}/dbs/${database.name}/colls/${vitals.name}'
+  }
+}
+
 resource incidentsWriteRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-05-15' = {
   parent: cosmos
   name: guid(cosmos.id, incidents.id, identity.id, 'write-incidents')

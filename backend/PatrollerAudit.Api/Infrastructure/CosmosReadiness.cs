@@ -1,4 +1,5 @@
 using System.Net.Security;
+using System.Collections.ObjectModel;
 using System.Security.Cryptography.X509Certificates;
 using Azure.Identity;
 using Microsoft.Azure.Cosmos;
@@ -35,9 +36,20 @@ public sealed class CosmosReadiness(RuntimeSettings settings) : IHealthCheck, ID
             {
                 var database = await client.CreateDatabaseIfNotExistsAsync(settings.DatabaseName, cancellationToken: cancellationToken);
                 await database.Database.CreateContainerIfNotExistsAsync("incidents", "/resortId", cancellationToken: cancellationToken);
+                var vitals = new ContainerProperties("vitals", "/incidentKey");
+                vitals.IndexingPolicy.CompositeIndexes.Add(new Collection<CompositePath>
+                {
+                    new() { Path = "/value/measuredAt", Order = CompositePathSortOrder.Descending },
+                    new() { Path = "/createdAt", Order = CompositePathSortOrder.Descending },
+                    new() { Path = "/id", Order = CompositePathSortOrder.Ascending }
+                });
+                await database.Database.CreateContainerIfNotExistsAsync(vitals, cancellationToken: cancellationToken);
             }
             else
+            {
                 await client.GetContainer(settings.DatabaseName, "incidents").ReadContainerAsync(cancellationToken: cancellationToken);
+                await client.GetContainer(settings.DatabaseName, "vitals").ReadContainerAsync(cancellationToken: cancellationToken);
+            }
             return HealthCheckResult.Healthy();
         }
         catch (Exception exception) when (exception is CosmosException or HttpRequestException or Azure.Identity.AuthenticationFailedException)
@@ -47,6 +59,9 @@ public sealed class CosmosReadiness(RuntimeSettings settings) : IHealthCheck, ID
     }
 
     public Container Incidents => client?.GetContainer(settings.DatabaseName, "incidents")
+        ?? throw new InvalidOperationException("Storage is not ready.");
+
+    public Container Vitals => client?.GetContainer(settings.DatabaseName, "vitals")
         ?? throw new InvalidOperationException("Storage is not ready.");
 
     private CosmosClient CreateClient()
