@@ -103,7 +103,8 @@ Dependency lockfiles are committed inputs.
 
 Use Node 24.x (at least 24.12) for Playwright browser installation and acceptance.
 The pinned Playwright 1.56 installer hangs on Node 26; frontend builds and unit
-tests still use Node 26 in CI.
+tests still use Node 26 in CI. The packaged-app CI job uses Ubuntu 24.04 because
+the pinned Playwright release does not support Ubuntu 26.04.
 
 ## Agent skills
 
